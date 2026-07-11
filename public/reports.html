@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التقارير المالية</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .report-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: 20px 0; }
+        .value { font-size: 22px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>📊 التقارير المالية</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:30px 0; text-align:center;">
+        <input type="text" id="monthInput" value="2026-07" style="padding:12px; font-size:18px; width:200px; text-align:center;">
+        <button onclick="generateMonthlyReport()" class="main-btn">عرض تقرير شهري</button>
+        <button onclick="exportMonthlyExcel()" class="main-btn" style="background:#27ae60;">تصدير Excel شهري</button>
+        <button onclick="generateYearlyReport()" class="main-btn">تقرير سنوي 2026</button>
+        <button onclick="exportYearlyExcel()" class="main-btn" style="background:#27ae60;">تصدير Excel سنوي</button>
+    </div>
+
+    <div id="reportResult" class="report-card"></div>
+
+    <script>
+        async function generateMonthlyReport() {
+            const month = document.getElementById('monthInput').value.trim();
+            if (!month) return alert("أدخل الشهر (YYYY-MM)");
+
+            const res = await fetch(`/api/reports/monthly/${month}`);
+            const data = await res.json();
+
+            document.getElementById('reportResult').innerHTML = `
+                <h2>تقرير شهر ${data.Month}</h2>
+                <p><strong>إيرادات الطلاب:</strong> <span class="value">${data.TotalStudentPayments.toLocaleString()} د.ج</span></p>
+                <p><strong>رواتب المعلمين:</strong> <span class="value">${data.TotalTeacherSalaries.toLocaleString()} د.ج</span></p>
+                <p><strong>مصروفات أخرى:</strong> <span class="value">${data.TotalOtherExpenses.toLocaleString()} د.ج</span></p>
+                <p><strong>إجمالي المصروفات:</strong> <span class="value">${data.TotalExpenses.toLocaleString()} د.ج</span></p>
+                <p style="color:${data.NetProfit >= 0 ? 'green' : 'red'}; font-size:26px; font-weight:bold;">
+                    الربح الصافي: ${data.NetProfit.toLocaleString()} د.ج
+                </p>
+            `;
+        }
+
+        async function generateYearlyReport() {
+            const res = await fetch('/api/reports/yearly/2026');
+            const data = await res.json();
+
+            let html = `<h2>📅 تقرير سنوي 2026</h2>
+                <table border="1" style="width:100%; border-collapse:collapse; margin:20px 0;">
+                <tr style="background:#2c3e50; color:white;">
+                    <th>الشهر</th><th>الإيرادات</th><th>رواتب المعلمين</th><th>مصروفات أخرى</th><th>إجمالي المصروفات</th><th>الربح</th>
+                </tr>`;
+
+            data.MonthlyReport.forEach(m => {
+                html += `<tr>
+                    <td>${m.Month}</td>
+                    <td>${m.Income.toLocaleString()}</td>
+                    <td>${m.TeacherSalaries.toLocaleString()}</td>
+                    <td>${m.OtherExpenses.toLocaleString()}</td>
+                    <td>${m.TotalExpenses.toLocaleString()}</td>
+                    <td style="font-weight:bold; color:${m.Net >= 0 ? 'green' : 'red'}">${m.Net.toLocaleString()}</td>
+                </tr>`;
+            });
+
+            html += `</table>
+                <p><strong>إجمالي الإيرادات:</strong> ${data.TotalIncome.toLocaleString()} د.ج</p>
+                <p><strong>إجمالي رواتب المعلمين:</strong> ${data.TotalTeacherSalaries.toLocaleString()} د.ج</p>
+                <p><strong>إجمالي مصروفات أخرى:</strong> ${data.TotalOtherExpenses.toLocaleString()} د.ج</p>
+                <p style="color:green; font-size:24px;"><strong>الربح الصافي للسنة:</strong> ${data.NetGain.toLocaleString()} د.ج</p>`;
+
+            document.getElementById('reportResult').innerHTML = html;
+        }
+
+        function exportMonthlyExcel() {
+            try {
+            const month = document.getElementById('monthInput').value.trim();
+            window.location.href = `/api/reports/export/financial/${month}`;
+            alert("✅ تم التصدير بنجاح!");
+            } catch (e) {
+                alert("❌ خطأ في تصدير التقرير السنوي");
+            }
+        }
+
+        function exportYearlyExcel() {
+            try {
+            window.location.href = '/api/reports/export/financial/yearly/2026';
+            alert("✅ تم التصدير بنجاح!");
+            } catch (e) {
+                alert("❌ خطأ في تصدير التقرير السنوي");
+            }
+        }
+
+        window.onload = generateMonthlyReport;
+    </script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الطلاب</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+    <h1>👨‍🎓 إدارة الطلاب</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:20px 0;">
+        <input type="text" id="searchInput" placeholder="ابحث بالاسم أو رقم الهاتف..." style="width:350px; padding:10px;" onkeyup="filterStudents()">
+        <button onclick="loadStudents()">بحث</button>
+        <button onclick="showAddForm()">+ إضافة طالب جديد</button>
+        <button onclick="exportStudentsExcel()">📊 تصدير إلى Excel</button>
+    </div>
+
+    <table id="studentsTable" border="1" width="100%">
+        <thead>
+            <tr>
+                <th>الرقم</th>
+                <th>الاسم الكامل</th>
+                <th>المستوى</th>
+                <th>تاريخ الميلاد</th>
+                <th>نوع الاشتراك</th>
+                <th>الهاتف</th>
+                <th>ولي الأمر</th>
+                <th>RFID</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Add Modal -->
+    <div id="addModal" class="modal" style="display:none;">
+        <h3>👨‍🎓 إضافة طالب جديد</h3>
+        
+        <input type="text" id="firstName" placeholder="اللقب" required>
+        <input type="text" id="lastName" placeholder="الاسم" required>
+        <input type="text" id="levelName" placeholder="المستوى" required>
+        <input type="date" id="dateOfBirth">
+        <select id="subscriptionType">
+            <option value="كلي">اشتراك كلي</option>
+            <option value="جزئي">اشتراك جزئي</option>
+        </select>
+        <input type="text" id="phone" placeholder="رقم هاتف الطالب">
+        <input type="text" id="parentPhone" placeholder="رقم ولي الأمر">
+        <input type="text" id="cardUID" placeholder="RFID">
+
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="addStudent()" style="background:#27ae60; color:white;">حفظ</button>
+            <button onclick="hideAddForm()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+    let allStudents = [];
+
+    async function loadStudents() {
+        try {
+            const res = await fetch('/api/students');
+            allStudents = await res.json();
+            renderStudents(allStudents);
+        } catch (e) {
+            alert('فشل في تحميل الطلاب');
+        }
+    }
+
+    function filterStudents() {
+        const term = document.getElementById('searchInput').value.toLowerCase().trim();
+        if (!term) {
+            renderStudents(allStudents);
+            return;
+        }
+        const filtered = allStudents.filter(s => 
+            `${s.FirstName || ''} ${s.LastName || ''}`.toLowerCase().includes(term) ||
+            (s.Phone || '').includes(term) ||
+            (s.ParentPhone || '').includes(term)
+        );
+        renderStudents(filtered);
+    }
+
+    function renderStudents(students) {
+        const tbody = document.querySelector('#studentsTable tbody');
+        tbody.innerHTML = students.map(s => `
+            <tr>
+                <td>${s.StudentID || ''}</td>
+                <td>${s.FirstName || ''} ${s.LastName || ''}</td>
+                <td>${s.LevelName || ''}</td>
+                <td>${s.DateOfBirth || ''}</td>
+                <td>${s.SubscriptionType || ''}</td>
+                <td>${s.Phone || ''}</td>
+                <td>${s.ParentPhone || ''}</td>
+                <td>${s.CardUID || ''}</td>
+                <td><button onclick="deleteStudent(${s.StudentID})" style="color:red;">حذف</button></td>
+            </tr>
+        `).join('');
+    }
+
+    async function addStudent() {
+        const data = {
+            FirstName: document.getElementById('firstName').value.trim(),
+            LastName: document.getElementById('lastName').value.trim(),
+            LevelName: document.getElementById('levelName').value.trim(),
+            DateOfBirth: document.getElementById('dateOfBirth').value,
+            Phone: document.getElementById('phone').value.trim(),
+            ParentPhone: document.getElementById('parentPhone').value.trim(),
+            CardUID: document.getElementById('cardUID').value.trim(),
+            SubscriptionType: document.getElementById('subscriptionType').value
+        };
+
+        if (!data.FirstName || !data.LastName) return alert("الاسم مطلوب");
+
+        try {
+            const res = await fetch('/api/students', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if (result.success) {
+                alert('✅ تم الحفظ');
+                hideAddForm();
+                loadStudents();
+            }
+        } catch (e) {
+            alert('❌ خطأ');
+        }
+    }
+
+    async function deleteStudent(id) {
+        if (confirm('حذف؟')) {
+            try {
+                await fetch(`/api/students/${id}`, { method: 'DELETE' });
+                alert("✅ تم الحذف");
+                loadStudents();
+            } catch (e) {
+                alert("❌ خطأ في الاتصال");
+            }
+        }
+    }
+
+    function showAddForm() { 
+        document.getElementById('addModal').style.display = 'block'; 
+    }
+
+    function hideAddForm() { 
+        document.getElementById('addModal').style.display = 'none'; 
+    }
+
+    // Excel Export - Clean & Fixed
+    async function exportStudentsExcel() {
+        try {
+            const res = await fetch('/api/students');
+            const students = await res.json();
+
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('الطلاب');
+
+            sheet.columns = [
+                { header: 'اللقب', key: 'FirstName', width: 20 },
+                { header: 'الاسم', key: 'LastName', width: 20 },
+                { header: 'تاريخ الميلاد', key: 'DateOfBirth', width: 15 },
+                { header: 'نوع الاشتراك', key: 'SubscriptionType', width: 18 },
+                { header: 'المستوى', key: 'LevelName', width: 20 },
+                { header: 'الهاتف', key: 'Phone', width: 15 }
+            ];
+
+            students.forEach(s => {
+                sheet.addRow({
+                    FirstName: s.FirstName || '',
+                    LastName: s.LastName || '',
+                    DateOfBirth: s.DateOfBirth || '',
+                    SubscriptionType: s.SubscriptionType || '',
+                    LevelName: s.LevelName || '',
+                    Phone: s.Phone || ''
+                });
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'قائمة_الطلاب.xlsx';
+            link.click();
+            URL.revokeObjectURL(url);
+
+            alert("✅ تم التصدير بنجاح!");
+        } catch (e) {
+            console.error(e);
+            alert("خطأ في التصدير");
+        }
+    }
+
+    window.onload = loadStudents;
+</script>
+</body>
+</html>

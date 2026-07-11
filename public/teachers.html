@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المعلمين</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+    <h1>👨‍🏫 إدارة المعلمين</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:20px 0;">
+        <input type="text" id="searchInput" placeholder="ابحث بالاسم أو المادة..." 
+               style="width:350px; padding:10px;" onkeyup="filterTeachers()">
+        <button onclick="loadTeachers()">بحث</button>
+        <button onclick="showAddForm()">+ إضافة معلم جديد</button>
+        <button onclick="exportTeachersExcel()">📊 تصدير إلى Excel</button>
+    </div>
+
+    <table id="teachersTable" border="1" width="100%">
+        <thead>
+            <tr>
+                <th>الرقم</th>
+                <th>الاسم الكامل</th>
+                <th>المادة</th>
+                <th>الهاتف</th>
+                <th>البريد</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Add Modal -->
+    <div id="addModal" class="modal" style="display:none;">
+        <h3>👨‍🏫 إضافة معلم جديد</h3>
+        
+        <input type="text" id="firstName" placeholder="اللقب" required>
+        <input type="text" id="lastName" placeholder="الاسم" required>
+        <input type="text" id="subject" placeholder="المادة" required>
+        <input type="text" id="phone" placeholder="رقم الهاتف">
+        <input type="email" id="email" placeholder="البريد الإلكتروني">
+
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="addTeacher()" style="background:#27ae60; color:white;">حفظ</button>
+            <button onclick="hideAddForm()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+        let allTeachers = [];
+
+        async function loadTeachers() {
+            try {
+                const res = await fetch('/api/teachers');
+                allTeachers = await res.json();
+                renderTeachers(allTeachers);
+            } catch (e) {
+                alert('فشل في تحميل المعلمين');
+            }
+        }
+
+        function filterTeachers() {
+            const term = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!term) {
+                renderTeachers(allTeachers);
+                return;
+            }
+            const filtered = allTeachers.filter(t => 
+                `${t.FirstName || ''} ${t.LastName || ''}`.toLowerCase().includes(term) ||
+                (t.Subject || '').toLowerCase().includes(term)
+            );
+            renderTeachers(filtered);
+        }
+
+        function renderTeachers(teachers) {
+            const tbody = document.querySelector('#teachersTable tbody');
+            tbody.innerHTML = teachers.map(t => `
+                <tr>
+                    <td>${t.TeacherID || ''}</td>
+                    <td>${t.FirstName || ''} ${t.LastName || ''}</td>
+                    <td>${t.Subject || '-'}</td>
+                    <td>${t.Phone || '-'}</td>
+                    <td>${t.Email || '-'}</td>
+                    <td><button onclick="deleteTeacher(${t.TeacherID})" style="color:red;">حذف</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function addTeacher() {
+            const data = {
+                FirstName: document.getElementById('firstName').value.trim(),
+                LastName: document.getElementById('lastName').value.trim(),
+                Subject: document.getElementById('subject').value.trim(),
+                Phone: document.getElementById('phone').value.trim(),
+                Email: document.getElementById('email').value.trim()
+            };
+
+            if (!data.FirstName || !data.LastName) {
+                return alert("الاسم مطلوب");
+            }
+
+            try {
+                const res = await fetch('/api/teachers', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    alert("✅ تم الحفظ");
+                    hideAddForm();
+                    loadTeachers();
+                } else {
+                    alert("❌ فشل في الحفظ");
+                }
+            } catch (e) {
+                alert("❌ خطأ في الاتصال");
+            }
+        }
+
+        async function deleteTeacher(id) {
+            if (confirm('حذف هذا المعلم؟')) {
+                try {
+                    await fetch(`/api/teachers/${id}`, { method: 'DELETE' });
+                    alert("✅ تم الحذف");
+                    loadTeachers();
+                } catch (e) {
+                    alert("❌ خطأ في الحذف");
+                }
+            }
+        }
+
+        async function exportTeachersExcel() {
+            try {
+                const res = await fetch('/api/teachers');
+                const teachers = await res.json();
+
+                const workbook = new ExcelJS.Workbook();
+                const sheet = workbook.addWorksheet('المعلمين');
+
+                sheet.columns = [
+                    { header: 'اللقب', key: 'FirstName', width: 20 },
+                    { header: 'الاسم', key: 'LastName', width: 20 },
+                    { header: 'المادة', key: 'Subject', width: 25 },
+                    { header: 'الهاتف', key: 'Phone', width: 15 }
+                ];
+
+                teachers.forEach(t => {
+                    sheet.addRow({
+                        FirstName: t.FirstName || '',
+                        LastName: t.LastName || '',
+                        Subject: t.Subject || '',
+                        Phone: t.Phone || ''
+                    });
+                });
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'قائمة_المعلمين.xlsx';
+                link.click();
+                URL.revokeObjectURL(url);
+
+                alert("✅ تم التصدير بنجاح!");
+            } catch (e) {
+                console.error(e);
+                alert("خطأ في التصدير");
+            }
+        }
+
+        function showAddForm() { 
+            document.getElementById('addModal').style.display = 'block'; 
+        }
+
+        function hideAddForm() { 
+            document.getElementById('addModal').style.display = 'none'; 
+        }
+
+        window.onload = loadTeachers;
+    </script>
+</body>
+</html>

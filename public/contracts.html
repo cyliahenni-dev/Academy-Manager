@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عقود المعلمين</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+    <h1>📋 عقود ورواتب المعلمين</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:20px 0;">
+        <select id="teacherSelect" style="padding:10px; width:300px;">
+            <option value="">اختر معلم</option>
+        </select>
+        <button onclick="loadContracts()">عرض العقود</button>
+        <button onclick="showAddForm()">+ إضافة عقد جديد</button>
+        <button onclick="exportTeacherContracts()" style="background:#27ae60;color:white;">📊 تصدير Excel</button>
+    </div>
+
+    <table id="contractsTable" border="1" width="100%">
+        <thead>
+            <tr>
+                <th>المعلم</th>
+                <th>المادة</th>
+                <th>نوع الدفع</th>
+                <th>القيمة</th>
+                <th>التاريخ</th>
+                <th>حالة الدفع</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">اختر معلم لعرض العقود</td></tr>
+        </tbody>
+    </table>
+
+    <div id="addModal" class="modal" style="display:none;">
+        <h3>📋 إضافة عقد جديد</h3>
+        
+        <select id="modalTeacherSelect" style="width:100%; padding:10px; margin:8px 0;">
+            <option value="">اختر معلم...</option>
+        </select>
+
+        <input type="text" id="subject" placeholder="المادة" style="width:100%; padding:10px; margin:8px 0;">
+
+        <select id="contractType" style="width:100%; padding:10px; margin:8px 0;">
+            <option value="شهري">شهري</option>
+            <option value="أسبوعي">أسبوعي</option>
+            <option value="يومي">يومي</option>
+            <option value="ساعي">ساعي</option>
+        </select>
+
+        <input type="number" id="amount" placeholder="المبلغ (د.ج)" style="width:100%; padding:10px; margin:8px 0;">
+
+        <input type="date" id="contractDate" style="width:100%; padding:10px; margin:8px 0;">
+
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="addContract()" style="background:#27ae60; color:white;">حفظ العقد</button>
+            <button onclick="hideAddForm()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+        async function loadTeachersForSelect() {
+            try {
+                const res = await fetch('/api/teachers');
+                const teachers = await res.json();
+                const html = teachers.map(t => `<option value="${t.TeacherID}">${t.FirstName} ${t.LastName}</option>`).join('');
+                document.getElementById('teacherSelect').innerHTML = '<option value="">اختر معلم</option>' + html;
+                document.getElementById('modalTeacherSelect').innerHTML = '<option value="">اختر معلم...</option>' + html;
+            } catch (e) {
+                console.error("Error loading teachers:", e);
+            }
+        }
+
+        async function loadContracts() {
+            const teacherId = document.getElementById('teacherSelect').value;
+            const tbody = document.querySelector('#contractsTable tbody');
+
+            if (!teacherId) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">اختر معلم لعرض العقود</td></tr>';
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/contracts/teacher/${teacherId}`);
+                const contracts = await res.json();
+                
+                if (contracts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">لا توجد عقود مسجلة لهذا المعلم</td></tr>';
+                    return;
+                }
+
+                const teacherText = document.getElementById('teacherSelect').options[document.getElementById('teacherSelect').selectedIndex].text;
+
+                tbody.innerHTML = contracts.map(c => `
+                    <tr>
+                        <td>${teacherText}</td>
+                        <td>${c.Subject || '-'}</td>
+                        <td>${c.PaymentMode || '-'}</td>
+                        <td>${c.PaymentRate || 0} د.ج</td>
+                        <td>${c.StartDate ? c.StartDate.split('T')[0] : '-'}</td>
+                        <td style="color: ${c.IsPaid ? 'green' : 'red'}; font-weight:bold;">
+                            ${c.IsPaid ? '✅ مدفوع' : '❌ غير مدفوع'}
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:8px; justify-content:center;">
+                                ${!c.IsPaid ? `<button onclick="markAsPaid(${c.ContractID})" style="color:green;">تأكيد الدفع</button>` : ''}
+                                <button onclick="deleteContract(${c.ContractID})" style="color:red;">حذف</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;padding:20px;">خطأ في تحميل البيانات</td></tr>';
+            }
+        }
+
+        async function markAsPaid(id) {
+            if (confirm('تأكيد إتمام الدفع؟')) {
+                try {
+                    await fetch(`/api/contracts/${id}/pay`, { method: 'POST' });
+                    alert("✅ تم تأكيد الدفع");
+                    loadContracts();
+                } catch (e) {
+                    alert("❌ خطأ في تأكيد الدفع");
+                }
+            }
+        }
+
+        async function addContract() {
+            const teacherId = document.getElementById('modalTeacherSelect').value;
+            if (!teacherId) return alert("اختر معلم أولاً");
+
+            const data = {
+                TeacherID: teacherId,
+                Subject: document.getElementById('subject').value.trim(),
+                PaymentMode: document.getElementById('contractType').value,
+                PaymentRate: parseFloat(document.getElementById('amount').value),
+                StartDate: document.getElementById('contractDate').value
+            };
+
+            if (!data.Subject || isNaN(data.PaymentRate)) {
+                return alert("يرجى إدخال المادة والقيمة");
+            }
+
+            try {
+                const res = await fetch('/api/contracts', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    alert("✅ تم الحفظ");
+                    hideAddForm();
+                    
+                    // إعادة تحميل للمعلم المختار
+                    document.getElementById('teacherSelect').value = teacherId;
+                    loadContracts();
+
+                    // تفريغ الحقول
+                    document.getElementById('subject').value = '';
+                    document.getElementById('amount').value = '';
+                    document.getElementById('contractDate').value = '';
+                } else {
+                    alert("❌ فشل في الحفظ");
+                }
+            } catch (e) {
+                alert("❌ خطأ في الاتصال");
+            }
+        }
+
+        async function deleteContract(id) {
+            if (confirm('حذف هذا العقد؟')) {
+                try {
+                    await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
+                    alert("✅ تم الحذف");
+                    loadContracts();
+                } catch (e) {
+                    alert("❌ خطأ في الحذف");
+                }
+            }
+        }
+
+        async function exportTeacherContracts() {
+            try {
+                const teachersRes = await fetch('/api/teachers');
+                const teachers = await teachersRes.json();
+
+                const workbook = new ExcelJS.Workbook();
+                const sheet = workbook.addWorksheet('عقود_المعلمين');
+
+                sheet.columns = [
+                    { header: 'المعلم', key: 'TeacherName', width: 25 },
+                    { header: 'المادة', key: 'Subject', width: 20 },
+                    { header: 'نوع الدفع', key: 'PaymentMode', width: 15 },
+                    { header: 'القيمة', key: 'PaymentRate', width: 15 },
+                    { header: 'التاريخ', key: 'StartDate', width: 15 },
+                    { header: 'حالة الدفع', key: 'IsPaid', width: 15 }
+                ];
+
+                for (const teacher of teachers) {
+                    const res = await fetch(`/api/contracts/teacher/${teacher.TeacherID}`);
+                    const contracts = await res.json();
+
+                    contracts.forEach(c => {
+                        sheet.addRow({
+                            TeacherName: `${teacher.FirstName} ${teacher.LastName}`,
+                            Subject: c.Subject || '',
+                            PaymentMode: c.PaymentMode || '',
+                            PaymentRate: c.PaymentRate || 0,
+                            StartDate: c.StartDate ? c.StartDate.split('T')[0] : '',
+                            IsPaid: c.IsPaid ? 'مدفوع' : 'غير مدفوع'
+                        });
+                    });
+                }
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'عقود_المعلمين.xlsx';
+                link.click();
+                URL.revokeObjectURL(url);
+
+                alert("✅ تم التصدير بنجاح!");
+            } catch (e) {
+                console.error("Export error:", e);
+                alert("خطأ في تصدير Excel");
+            }
+        }
+
+        function showAddForm() { 
+            document.getElementById('addModal').style.display = 'block'; 
+        }
+
+        function hideAddForm() { 
+            document.getElementById('addModal').style.display = 'none'; 
+        }
+
+        // Events
+        document.getElementById('teacherSelect').addEventListener('change', loadContracts);
+        window.onload = loadTeachersForSelect;
+    </script>
+</body>
+</html>

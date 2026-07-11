@@ -1,0 +1,9 @@
+node_modules/
+dist/
+backups/
+config/
+controllers/
+.env
+academy.db
+database.db
+*.log

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الدفعات</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>💰 إدارة دفعات الطلاب</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:20px 0;">
+        <input type="text" id="searchInput" placeholder="ابحث بالاسم..." style="width:300px; padding:10px;">
+        <button onclick="loadPayments()">بحث</button>
+        <button onclick="showAddForm()" class="main-btn">+ إضافة دفعة</button>
+        <button onclick="exportPaymentsExcel()" class="main-btn" style="background:#27ae60;">📊 تصدير Excel</button>
+    </div>
+
+    <table id="paymentsTable" border="1" width="100%">
+        <thead>
+            <tr>
+                <th>الطالب</th>
+                <th>تاريخ الميلاد</th>
+                <th>المادة</th>
+                <th>الدورة</th>
+                <th>المبلغ</th>
+                <th>التاريخ</th>
+                <th>إجراء</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Modal -->
+    <div id="addModal" class="modal" style="display:none;">
+        <h3>💰 إضافة دفعة جديدة</h3>
+        
+        <select id="modalStudent" style="width:100%; padding:10px; margin:8px 0;">
+            <option value="">اختر الطالب</option>
+        </select>
+        
+        <input type="text" id="modalSubject" placeholder="المادة" style="width:100%; padding:10px; margin:8px 0;">
+        <input type="number" id="modalCycle" placeholder="رقم الدورة" style="width:100%; padding:10px; margin:8px 0;">
+        <input type="number" id="modalAmount" placeholder="المبلغ (د.ج)" style="width:100%; padding:10px; margin:8px 0;">
+        <input type="date" id="modalDate" style="width:100%; padding:10px; margin:8px 0;">
+        
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="addPayment()" style="background:#27ae60; color:white;">حفظ الدفعة</button>
+            <button onclick="hideAddForm()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+    async function loadStudentsForModal() {
+        try {
+            const res = await fetch('/api/students');
+            const students = await res.json();
+            const html = students.map(s => 
+                `<option value="${s.StudentID}">${s.FirstName} ${s.LastName}</option>`
+            ).join('');
+            document.getElementById('modalStudent').innerHTML = `<option value="">اختر الطالب</option>` + html;
+        } catch(e) {
+            console.error("Error loading students", e);
+        }
+    }
+
+    async function loadPayments() {
+        console.log("🔄 Loading payments...");
+        const search = document.getElementById('searchInput').value.trim();
+        let url = '/api/payments';
+        if (search) url += `?name=${encodeURIComponent(search)}`;
+
+        try {
+            const res = await fetch(url);
+            console.log("Status:", res.status);
+            const payments = await res.json();
+            console.log("Payments received:", payments.length, payments);
+
+            const tbody = document.querySelector('#paymentsTable tbody');
+            tbody.innerHTML = payments.map(p => {
+                let cleanDate = '-';
+                if (p.PaymentDate) {
+                    const datePart = p.PaymentDate.split('T')[0];
+                    const [year, month, day] = datePart.split('-');
+                    cleanDate = `${day}-${month}-${year}`;
+                }
+                return `
+                    <tr>
+                        <td>${p.StudentName || 'غير معروف'}</td>
+                        <td>${p.BirthDate || '-'}</td>
+                        <td>${p.Subject || '-'}</td>
+                        <td>${p.CycleNumber || '-'}</td>
+                        <td>${p.AmountPaid} د.ج</td>
+                        <td>${cleanDate}</td>
+                        <td><button onclick="deletePayment(${p.PaymentID})" style="color:red;">حذف</button></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch(e) {
+            console.error("Error loading payments", e);
+            document.querySelector('#paymentsTable tbody').innerHTML = `<tr><td colspan="7">خطأ في تحميل الدفعات</td></tr>`;
+        }
+    }
+
+    async function addPayment() {
+        const data = {
+            StudentID: document.getElementById('modalStudent').value,
+            Subject: document.getElementById('modalSubject').value,
+            CycleNumber: parseInt(document.getElementById('modalCycle').value) || 1,
+            AmountPaid: parseFloat(document.getElementById('modalAmount').value),
+            PaymentDate: document.getElementById('modalDate').value
+        };
+
+        if (!data.StudentID || !data.AmountPaid) {
+            return alert("يرجى اختيار الطالب وإدخال المبلغ");
+        }
+
+        console.log("Sending payment:", data);
+
+        try {
+            const res = await fetch('/api/payments', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            console.log("Add result:", result);
+
+            if (result.success) {
+                alert("✅ تم إضافة الدفعة");
+                hideAddForm();
+                loadPayments();
+            } else {
+                alert("❌ " + (result.error || 'خطأ'));
+            }
+        } catch(e) {
+            console.error("Add payment error", e);
+            alert("خطأ في الاتصال");
+        }
+    }
+
+    async function deletePayment(id) {
+        if (confirm('حذف هذه الدفعة؟')) {
+            try {
+                await fetch(`/api/payments/${id}`, { method: 'DELETE' });
+                alert("✅ تم تأكيد الدفع");
+                loadPayments();
+         } catch (e) {
+                    alert("❌ خطأ في الحذف");
+                }
+       }
+    }
+
+    function showAddForm() {
+        document.getElementById('addModal').style.display = 'block';
+        loadStudentsForModal();
+    }
+
+    function hideAddForm() {
+        document.getElementById('addModal').style.display = 'none';
+    }
+
+    async function exportPaymentsExcel() {
+    try {
+        const res = await fetch('/api/payments');
+        const payments = await res.json();
+
+        const BOM = '\uFEFF';
+        const headers = ['الطالب', 'التاريخ', 'المادة', 'الدورة', 'المبلغ'];
+
+        const rows = payments.map(p => {
+            let cleanDate = '';
+            if (p.PaymentDate) {
+                const datePart = p.PaymentDate.split('T')[0];
+                const [year, month, day] = datePart.split('-');
+                cleanDate = `${day}-${month}-${year}`;
+            }
+            return [
+                p.StudentName || '',
+                cleanDate,
+                p.Subject || '',
+                p.CycleNumber || '',
+                p.AmountPaid || 0
+            ];
+        });
+
+        const csvContent = BOM + [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'دفعات_الطلاب.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log("✅ Excel exported successfully");
+        alert("✅ تم التصدير بنجاح!");
+    } catch (e) {
+        console.error("Export error:", e);
+        alert("خطأ في تصدير Excel");
+    }
+}
+
+    window.onload = () => {
+        console.log("Page loaded - loading payments");
+        loadPayments();
+    };
+</script>
+</body>
+</html>

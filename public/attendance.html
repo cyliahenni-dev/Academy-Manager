@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الحضور</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
+        .tab { padding: 14px 28px; margin: 5px; border-radius: 10px; font-weight: bold; cursor: pointer; background:#eee; border:none; font-size:15px; }
+        .active-tab { background: #27ae60; color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+        th, td { padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; }
+        th { background: #2c3e50; color: white; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f9f9f9; }
+
+        .delete-btn { 
+            background:#e74c3c; 
+            color:white; 
+            padding:6px 14px; 
+            border:none; 
+            border-radius:5px; 
+            cursor:pointer; 
+            font-size:13px;
+            margin: 2px;
+        }
+        .delete-btn:hover { background:#c0392b; }
+
+        .progress-wrap { display:flex; align-items:center; gap:8px; justify-content:center; }
+        .progress-bar-bg   { background:#e0e0e0; border-radius:8px; width:80px; height:12px; }
+        .progress-bar-fill { background:#27ae60; height:12px; border-radius:8px; }
+
+        .badge-complete { background:#d4edda; color:#155724; border-radius:20px; padding:3px 12px; font-size:13px; font-weight:bold; }
+        .badge-ongoing  { background:#fff3cd; color:#856404; border-radius:20px; padding:3px 12px; font-size:13px; font-weight:bold; }
+
+        .dates-list { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; max-width:260px; margin:0 auto; }
+        .date-chip  { background:#e8f4fd; color:#1a5276; border-radius:12px; padding:2px 10px; font-size:12px; }
+        .date-chip-t { background:#fef9e7; color:#7d6608; border-radius:12px; padding:2px 10px; font-size:12px; }
+
+        .record-card { background:white; border-radius:14px; padding:20px; margin:15px 0; box-shadow:0 2px 10px rgba(0,0,0,0.08); display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .record-card input, .record-card select { padding:11px; border:1px solid #ddd; border-radius:8px; font-size:14px; }
+
+        #confirmModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; }
+        #confirmModal.show { display:flex; }
+        .confirm-box { background:white; padding:30px; border-radius:16px; max-width:420px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+        .confirm-box p { font-size:17px; margin-bottom:20px; }
+        .btn-yes { background:#27ae60; color:white; padding:12px 28px; border:none; border-radius:8px; cursor:pointer; margin:5px; font-size:15px; }
+        .btn-no  { background:#e74c3c; color:white; padding:12px 28px; border:none; border-radius:8px; cursor:pointer; margin:5px; font-size:15px; }
+
+        .subject-card { display:inline-flex; align-items:center; gap:10px; background:#f4f6f8; border:1px solid #ddd; border-radius:10px; padding:10px 16px; margin:6px; }
+        .size-badge { background:#2c3e50; color:white; border-radius:20px; padding:3px 12px; font-size:13px; }
+
+        .filter-bar { background:white; border-radius:12px; padding:14px 18px; margin:10px 0; box-shadow:0 1px 6px rgba(0,0,0,0.07); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+        .filter-bar input, .filter-bar select { padding:9px 13px; border:1px solid #ddd; border-radius:8px; font-size:14px; }
+        .btn-filter { background:#2c3e50; color:white; padding:9px 18px; border:none; border-radius:8px; cursor:pointer; }
+        .btn-clear  { background:#95a5a6; color:white; padding:9px 18px; border:none; border-radius:8px; cursor:pointer; }
+
+        #scanResult { margin:10px 0; font-size:17px; min-height:40px; }
+    </style>
+</head>
+<body>
+    <h1>📅 تسجيل الحضور</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="text-align:center; margin:20px 0;">
+        <button class="tab active-tab" onclick="showTab(1)">👨‍🏫 حضور المعلمين</button>
+        <button class="tab"            onclick="showTab(2)">👨‍🎓 حضور الطلاب</button>
+        <button class="tab"            onclick="showTab(3)">⚙️ إعدادات المواد</button>
+    </div>
+
+    <div style="text-align:center; margin:10px;">
+        <button onclick="exportTeachersExcel()">📥 تصدير معلمين Excel</button>
+        <button onclick="exportStudentsExcel()">📥 تصدير طلاب Excel</button>
+    </div>
+
+    <div id="tab1">
+        <h2>حضور المعلمين</h2>
+
+        <div class="record-card">
+            <select id="teacherSelect" style="width:220px;"></select>
+            <input type="text"   id="teacherSubject" placeholder="المادة"   style="width:150px;">
+            <input type="number" id="workedUnits"    value="1"              style="width:80px;">
+            <input type="date"   id="teacherDate"                           style="width:155px;">
+            <button onclick="recordTeacherAttendance()" style="background:#27ae60;color:white;padding:11px 22px;border:none;border-radius:8px;cursor:pointer;">✅ تسجيل</button>
+        </div>
+
+        <div class="filter-bar">
+            <span style="font-weight:bold;">🔍 فلتر:</span>
+            <select id="teacherFilterSelect" onchange="loadTeacherHistory()">
+                <option value="">كل المعلمين</option>
+            </select>
+            <button class="btn-clear" onclick="document.getElementById('teacherFilterSelect').value=''; loadTeacherHistory()">عرض الكل</button>
+        </div>
+
+        <h3>سجل حضور المعلمين</h3>
+        <table id="teacherHistory">
+            <thead>
+                <tr>
+                    <th>المعلم</th>
+                    <th>المادة</th>
+                    <th>عدد الحضور</th>
+                    <th>إجمالي الوحدات</th>
+                    <th>تواريخ الحضور</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="tab2" style="display:none;">
+        <h2>حضور الطلاب</h2>
+
+        <div class="record-card">
+            <input type="text" id="rfidInput" placeholder="RFID أو اسم الطالب" autofocus style="width:230px; font-size:16px;">
+            <select id="subjectSelect" style="width:200px; padding:11px;"><option value="">اختر مادة</option></select>
+            <input type="date" id="studentDate" style="width:155px;">
+            <button onclick="recordStudentAttendance()" style="background:#27ae60;color:white;padding:11px 22px;border:none;border-radius:8px;cursor:pointer;font-size:15px;">✅ تسجيل</button>
+        </div>
+        <div id="scanResult"></div>
+
+        <div class="filter-bar">
+            <span style="font-weight:bold;">🔍 فلتر:</span>
+            <input type="text" id="studentFilterName" placeholder="ابحث بالاسم أو الرقم..." style="width:220px;" oninput="filterStudentsTable()">
+            <select id="studentFilterSubject" onchange="filterStudentsTable()">
+                <option value="">كل المواد</option>
+            </select>
+            <button class="btn-clear" onclick="clearStudentFilter()">عرض الكل</button>
+        </div>
+
+        <h3>سجل حضور الطلاب</h3>
+        <table id="studentHistory">
+            <thead>
+                <tr>
+                    <th>الطالب</th>
+                    <th>المادة</th>
+                    <th>الدورة الحالية</th>
+                    <th>التقدم في الدورة</th>
+                    <th>تواريخ الحضور</th>
+                    <th>الحالة</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="tab3" style="display:none;">
+        <h2>⚙️ إعدادات حجم الدورة لكل مادة</h2>
+        <p style="color:#555;">الافتراضي: 4 حضور في الدورة</p>
+        <div style="display:flex; gap:10px; align-items:center; margin:20px 0; flex-wrap:wrap;">
+            <input type="text"   id="newSubject"   placeholder="اسم المادة" style="padding:12px; width:200px; border:1px solid #ddd; border-radius:8px;">
+            <input type="number" id="newCycleSize" placeholder="حجم الدورة" value="4" min="1" max="20" style="padding:12px; width:130px; border:1px solid #ddd; border-radius:8px;">
+            <button onclick="saveSubjectSetting()" style="background:#2c3e50;color:white;padding:12px 22px;border:none;border-radius:8px;cursor:pointer;">💾 حفظ</button>
+        </div>
+        <div id="subjectsList"></div>
+    </div>
+
+    <div id="confirmModal">
+        <div class="confirm-box">
+            <p id="confirmMsg"></p>
+            <button class="btn-yes" onclick="confirmAttendance()">نعم، سجّل مجدداً</button>
+            <button class="btn-no"  onclick="closeConfirm()">لا، إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+        let pendingAttendance = null;
+        let subjectCycleMap  = {};
+        let allStudentGrouped = [];
+        let allTeacherGrouped = [];
+
+        function showTab(n) {
+            [1,2,3].forEach(i => document.getElementById(`tab${i}`).style.display = i === n ? 'block' : 'none');
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active-tab', i + 1 === n));
+            if (n === 3) loadSubjectSettings();
+        }
+
+        async function loadTeachers() {
+            try {
+                const res = await fetch('/api/teachers');
+                const teachers = await res.json();
+
+                const opts = teachers.map(t =>
+                    `<option value="${t.TeacherID}">${t.FirstName} ${t.LastName}</option>`
+                ).join('');
+
+                document.getElementById('teacherSelect').innerHTML = opts;
+
+                document.getElementById('teacherFilterSelect').innerHTML =
+                    '<option value="">كل المعلمين</option>' +
+                    teachers.map(t => `<option value="${t.TeacherID}">${t.FirstName} ${t.LastName}</option>`).join('');
+            } catch (err) { console.error("Error loading teachers:", err); }
+        }
+
+        async function recordTeacherAttendance() {
+            const TeacherID   = document.getElementById('teacherSelect').value;
+            const Subject     = document.getElementById('teacherSubject').value.trim();
+            const WorkedUnits = parseFloat(document.getElementById('workedUnits').value) || 1;
+            const Date        = document.getElementById('teacherDate').value || new Date().toISOString().split('T')[0];
+            if (!TeacherID) return alert("اختر معلم");
+            
+            try {
+                const res = await fetch('/api/attendance/teacher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ TeacherID, WorkedUnits, Subject, Date })
+                });
+                const data = await res.json();
+                if (data.success) { alert("✅ تم التسجيل"); loadTeacherHistory(); }
+                else alert('❌ ' + (data.error || 'خطأ'));
+            } catch (err) { alert('❌ حدث خطأ في الشبكة'); }
+        }
+
+        async function loadTeacherHistory() {
+            try {
+                const res     = await fetch('/api/attendance/teachers-all');
+                const records = await res.json();
+
+                const filterID = document.getElementById('teacherFilterSelect').value;
+
+                const grouped = {};
+                records.forEach(r => {
+                    if (filterID && String(r.TeacherID) !== String(filterID)) return;
+
+                    const key = `${r.TeacherID}|${r.Subject || '-'}`;
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            name:        `${r.FirstName} ${r.LastName}`,
+                            subject:     r.Subject || '-',
+                            count:       0,
+                            totalUnits:  0,
+                            dates:       [],
+                            ids:         []
+                        };
+                    }
+                    grouped[key].count++;
+                    grouped[key].totalUnits += (r.WorkedUnits || 1);
+                    grouped[key].dates.push(r.Date);
+                    grouped[key].ids.push(r.AttendanceID);
+                });
+
+                const sorted = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+                allTeacherGrouped = sorted;
+                renderTeacherTable(sorted);
+            } catch (err) { console.error(err); }
+        }
+
+        function renderTeacherTable(data) {
+            document.querySelector('#teacherHistory tbody').innerHTML = data.map((g, idx) => {
+                const sortedDates = [...g.dates].sort((a, b) => b.localeCompare(a));
+                const shown = sortedDates.slice(0, 8);
+                const moreCount = sortedDates.length - 8;
+
+                let datesHtml = shown.map(d => `<span class="date-chip-t">${d}</span>`).join('');
+
+                if (moreCount > 0) {
+                    datesHtml += `<span class="date-chip-t" onclick="toggleMoreDates(this, '${sortedDates.slice(8).join(',')}')" style="cursor:pointer;background:#e3f2fd;color:#1565c0;">+${moreCount} أخرى</span>`;
+                }
+
+                return `
+                <tr>
+                    <td style="font-weight:bold;">${g.name}</td>
+                    <td>${g.subject}</td>
+                    <td>${g.count}</td>
+                    <td>${g.totalUnits}</td>
+                    <td><div class="dates-list">${datesHtml}</div></td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteTeacherAttendance(${idx})">🗑️ حذف</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function deleteTeacherAttendance(groupIndex) {
+            const g = allTeacherGrouped[groupIndex];
+            if (!g) return;
+            if (!confirm(`حذف كل سجلات حضور "${g.name}" في "${g.subject}" (${g.ids.length} سجل)؟`)) return;
+
+            try {
+                const results = await Promise.all(
+                    g.ids.map(id => fetch(`/api/attendance/teacher/${id}`, { method: 'DELETE' }))
+                );
+                const allOk = results.every(r => r.ok);
+                if (allOk) {
+                    alert('✅ تم الحذف');
+                } else {
+                    alert('⚠️ تم حذف بعض السجلات، وفشل حذف البعض الآخر');
+                }
+                loadTeacherHistory();
+            } catch (err) {
+                alert('❌ خطأ في الاتصال');
+            }
+        }
+
+        async function recordStudentAttendance(force = false) {
+            const input   = document.getElementById('rfidInput').value.trim();
+            const Subject = document.getElementById('subjectSelect').value;
+            const Date    = document.getElementById('studentDate').value || new Date().toISOString().split('T')[0];
+
+            if (!input)   return alert("يرجى إدخال RFID أو اسم الطالب");
+            if (!Subject) return alert("يرجى اختيار المادة");
+
+            try {
+                const res  = await fetch('/api/attendance/student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ StudentID: input, Subject, Date, force })
+                });
+                const data = await res.json();
+
+                if (data.needsConfirm) {
+                    pendingAttendance = { input, Subject, Date };
+                    document.getElementById('confirmMsg').textContent = data.message;
+                    document.getElementById('confirmModal').classList.add('show');
+                    return;
+                }
+
+                if (data.success) {
+                    const pct = Math.round((data.positionInCycle / data.cycleSize) * 100);
+                    document.getElementById('scanResult').innerHTML = `
+                        <span style="color:#27ae60;font-weight:bold;">✅ ${data.message}</span>
+                        <div style="margin-top:6px;">
+                            <div class="progress-bar-bg" style="width:140px;height:14px;display:inline-block;vertical-align:middle;">
+                                <div class="progress-bar-fill" style="width:${pct}%;"></div>
+                            </div>
+                            <span style="margin-right:8px;">${data.positionInCycle}/${data.cycleSize}</span>
+                        </div>`;
+                        alert("✅ تم تسجيل الحضور");
+                    document.getElementById('rfidInput').value = '';
+                    loadStudentsAttendance();
+                } else {
+                    document.getElementById('scanResult').innerHTML = `<span style="color:red;">❌ ${data.error || 'حدث خطأ'}</span>`;
+                }
+            } catch (err) { alert("❌ خطأ في الاتصال بالسيرفر"); }
+        }
+
+        function confirmAttendance() {
+            closeConfirm();
+            if (!pendingAttendance) return;
+            document.getElementById('rfidInput').value = pendingAttendance.input;
+            document.getElementById('subjectSelect').value = pendingAttendance.Subject;
+            recordStudentAttendance(true);
+        }
+        function closeConfirm() {
+            document.getElementById('confirmModal').classList.remove('show');
+            pendingAttendance = null;
+        }
+
+        async function loadStudentsAttendance() {
+            try {
+                const res     = await fetch('/api/attendance/students-all');
+                const records = await res.json();
+
+                const grouped = {};
+                records.forEach(r => {
+                    const key = `${r.StudentID}|${r.Subject}`;
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            StudentID:    r.StudentID,
+                            name:         `${r.FirstName || ''} ${r.LastName || r.StudentID}`.trim(),
+                            subject:      r.Subject || '-',
+                            maxCycle:     r.Cycle,
+                            dates:        [],
+                            ids:          [],
+                            cycleSize:    subjectCycleMap[r.Subject] || 4,
+                            countInLastCycle: 0
+                        };
+                    }
+                    if (r.Cycle > grouped[key].maxCycle) grouped[key].maxCycle = r.Cycle;
+                    grouped[key].dates.push(r.Date);
+                    grouped[key].ids.push(r.AttendanceID);
+                });
+
+                records.forEach(r => {
+                    const key = `${r.StudentID}|${r.Subject}`;
+                    const g   = grouped[key];
+                    if (r.Cycle === g.maxCycle) g.countInLastCycle++;
+                });
+
+                allStudentGrouped = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+                renderStudentTable(allStudentGrouped);
+            } catch (err) { console.error(err); }
+        }
+
+        function renderStudentTable(data) {
+            document.querySelector('#studentHistory tbody').innerHTML = data.map(g => {
+                const size       = g.cycleSize;
+                const count      = g.countInLastCycle || 0;
+                const isComplete = count >= size;
+                const pct        = Math.min(Math.round((count / size) * 100), 100);
+
+                const sortedDates = [...g.dates].sort((a, b) => b.localeCompare(a));
+                const shown = sortedDates.slice(0, 8);
+                const moreCount = sortedDates.length - 8;
+
+                let datesHtml = shown.map(d => `<span class="date-chip">${d}</span>`).join('');
+
+                if (moreCount > 0) {
+                    datesHtml += `<span class="date-chip" onclick="toggleMoreDates(this, '${sortedDates.slice(8).join(',')}')" style="cursor:pointer;background:#e3f2fd;color:#1565c0;">+${moreCount} أخرى</span>`;
+                }
+
+                const bar = `
+                    <div class="progress-wrap">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width:${pct}%"></div>
+                        </div>
+                        <span style="font-size:13px;font-weight:bold;">${count}/${size}</span>
+                    </div>`;
+
+                return `
+                <tr data-name="${g.name}" data-subject="${g.subject}">
+                    <td style="font-weight:bold;">${g.name}</td>
+                    <td>${g.subject}</td>
+                    <td><strong>دورة ${g.maxCycle}</strong></td>
+                    <td>${bar}</td>
+                    <td><div class="dates-list">${datesHtml}</div></td>
+                    <td><span class="${isComplete ? 'badge-complete' : 'badge-ongoing'}">${isComplete ? '✅ مكتملة' : '🔄 جارية'}</span></td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteStudentAttendance('${g.StudentID}', '${g.subject}')">🗑️ حذف</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function deleteStudentAttendance(studentID, subject) {
+            const g = allStudentGrouped.find(x => String(x.StudentID) === String(studentID) && x.subject === subject);
+            if (!g) return;
+            if (!confirm(`حذف كل سجلات حضور الطالب في "${subject}" (${g.ids.length} سجل)؟`)) return;
+
+            try {
+                const results = await Promise.all(
+                    g.ids.map(id => fetch(`/api/attendance/student/${id}`, { method: 'DELETE' }))
+                );
+                const allOk = results.every(r => r.ok);
+                if (allOk) {
+                    alert('✅ تم الحذف');
+                } else {
+                    alert('⚠️ تم حذف بعض السجلات، وفشل حذف البعض الآخر');
+                }
+                loadStudentsAttendance();
+            } catch (err) {
+                alert('❌ خطأ في الاتصال');
+            }
+        }
+
+        function toggleMoreDates(el, moreDatesStr) {
+            const moreDates = moreDatesStr.split(',');
+            const container = el.parentElement;
+            const isTeacher = el.classList.contains('date-chip-t');
+            const chipClass = isTeacher ? 'date-chip-t' : 'date-chip';
+
+            if (el.dataset.expanded === 'true') {
+                el.dataset.expanded = 'false';
+                el.textContent = `+${moreDates.length} أخرى`;
+                el.style.background = '#e3f2fd';
+                el.style.color = '#1565c0';
+
+                const children = Array.from(container.children);
+                for (let i = children.length - 1; i >= 0; i--) {
+                    const child = children[i];
+                    if (child !== el && child.classList.contains(chipClass) && child.dataset.added === 'true') {
+                        container.removeChild(child);
+                    }
+                }
+            } else {
+                el.dataset.expanded = 'true';
+                el.textContent = 'إخفاء';
+                el.style.background = '#e8f5e9';
+                el.style.color = '#2e7d32';
+
+                moreDates.forEach(d => {
+                    const chip = document.createElement('span');
+                    chip.className = chipClass;
+                    chip.textContent = d;
+                    chip.dataset.added = 'true';
+                    container.appendChild(chip);
+                });
+            }
+        }
+
+        function filterStudentsTable() {
+            const name    = document.getElementById('studentFilterName').value.trim().toLowerCase();
+            const subject = document.getElementById('studentFilterSubject').value;
+
+            const filtered = allStudentGrouped.filter(g => {
+                const matchName    = !name    || g.name.toLowerCase().includes(name) || String(g.StudentID).includes(name);
+                const matchSubject = !subject || g.subject === subject;
+                return matchName && matchSubject;
+            });
+            renderStudentTable(filtered);
+        }
+
+        function clearStudentFilter() {
+            document.getElementById('studentFilterName').value    = '';
+            document.getElementById('studentFilterSubject').value = '';
+            renderStudentTable(allStudentGrouped);
+        }
+
+        async function loadSubjectSettings() {
+            try {
+                const res      = await fetch('/api/attendance/subjects');
+                const subjects = await res.json();
+
+                subjectCycleMap = {};
+                subjects.forEach(s => subjectCycleMap[s.Subject] = s.CycleSize);
+
+                const base = '<option value="">اختر مادة</option>';
+                document.getElementById('subjectSelect').innerHTML =
+                    base + subjects.map(s => `<option value="${s.Subject}">${s.Subject} (${s.CycleSize} حضور/دورة)</option>`).join('');
+
+                document.getElementById('studentFilterSubject').innerHTML =
+                    '<option value="">كل المواد</option>' +
+                    subjects.map(s => `<option value="${s.Subject}">${s.Subject}</option>`).join('');
+
+                document.getElementById('subjectsList').innerHTML = subjects.length
+                    ? subjects.map(s => `
+                        <div class="subject-card">
+                            <span>${s.Subject}</span>
+                            <span class="size-badge">${s.CycleSize} حضور / دورة</span>
+                            <button class="delete-btn" onclick="deleteSubject('${s.Subject}')">حذف</button>
+                        </div>`).join('')
+                    : '<p style="color:#888;">لا توجد مواد. أضف مادة أعلاه.</p>';
+            } catch (err) { console.error("Error loading subject settings:", err); }
+        }
+
+        async function saveSubjectSetting() {
+            const Subject   = document.getElementById('newSubject').value.trim();
+            const CycleSize = parseInt(document.getElementById('newCycleSize').value);
+            if (!Subject || !CycleSize) return alert('أدخل اسم المادة وحجم الدورة');
+            
+            try {
+                const res = await fetch('/api/attendance/subjects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Subject, CycleSize })
+                });
+
+                if (res.ok) {
+                    alert('✅ تم حفظ إعداد حجم الدورة للمادة بنجاح');
+                    document.getElementById('newSubject').value   = '';
+                    document.getElementById('newCycleSize').value = '4';
+                    await loadSubjectSettings();
+                } else {
+                    alert('❌ فشل الحفظ');
+                }
+            } catch (err) {
+                alert('❌ حدث خطأ في الاتصال بالشبكة');
+            }
+        }
+
+        async function deleteSubject(subject) {
+            if (confirm(`حذف إعداد مادة "${subject}"؟`)) {
+                try {
+                    const res = await fetch(`/api/attendance/subjects/${encodeURIComponent(subject)}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        alert('✅ تم حذف المادة');
+                        loadSubjectSettings();
+                    } else {
+                        alert('❌ فشل الحذف');
+                    }
+                } catch (err) { alert('❌ حدث خطأ أثناء الاتصال بالخادم'); }
+            }
+        }
+
+        // Export functions
+        async function exportStudentsExcel() {
+            try {
+                const res = await fetch('/api/attendance/students-all');
+                const records = await res.json();
+
+                const BOM = '\uFEFF';
+                const headers = ['الطالب', 'المادة', 'الدورة', 'التاريخ'];
+                const rows = records.map(r => [
+                    `${r.FirstName || ''} ${r.LastName || r.StudentID}`.trim(),
+                    r.Subject || '',
+                    r.Cycle || '',
+                    r.Date || ''
+                ]);
+
+                const csvContent = BOM + [headers, ...rows]
+                    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                    .join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'حضور_الطلاب.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+                alert("✅ تم التصدير بنجاح!");
+            } catch (err) { alert("❌ فشل التصدير"); }
+        }
+
+        async function exportTeachersExcel() {
+            try {
+                const res = await fetch('/api/attendance/teachers-all');
+                const records = await res.json();
+
+                const BOM = '\uFEFF';
+                const headers = ['المعلم', 'المادة', 'الوحدات', 'التاريخ'];
+                const rows = records.map(r => [
+                    `${r.FirstName} ${r.LastName}`,
+                    r.Subject || '',
+                    r.WorkedUnits || '',
+                    r.Date || ''
+                ]);
+
+                const csvContent = BOM + [headers, ...rows]
+                    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                    .join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'حضور_المعلمين.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+                alert("✅ تم التصدير بنجاح!");
+            } catch (err) { alert("❌ فشل التصدير"); }
+        }
+
+        window.onload = async () => {
+            await loadTeachers();
+            await loadSubjectSettings();
+            loadTeacherHistory();
+            loadStudentsAttendance();
+            showTab(2);
+        };
+    </script>
+</body>
+</html>

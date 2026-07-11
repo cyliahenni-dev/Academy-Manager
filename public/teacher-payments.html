@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دفع رواتب المعلمين</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>💰 دفع رواتب المعلمين</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:20px 0;">
+        <select id="teacherSelect" style="padding:10px; width:300px;"></select>
+        <input type="text" id="monthInput" value="2026-05" placeholder="YYYY-MM" style="padding:10px; width:120px;">
+        <input type="number" id="amountInput" placeholder="المبلغ" style="padding:10px; width:150px;">
+        <input type="text" id="notesInput" placeholder="ملاحظات" style="padding:10px; width:200px;">
+        <button onclick="addTeacherPayment()" class="main-btn">حفظ الدفع</button>
+    </div>
+
+    <table id="paymentsTable" border="1" width="100%">
+        <thead>
+            <tr>
+                <th>التاريخ</th>
+                <th>المعلم</th>
+                <th>الشهر</th>
+                <th>المبلغ</th>
+                <th>ملاحظات</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        async function loadTeachers() {
+            const res = await fetch('/api/teachers');
+            const teachers = await res.json();
+            const html = teachers.map(t => `<option value="${t.TeacherID}">${t.FirstName} ${t.LastName}</option>`).join('');
+            document.getElementById('teacherSelect').innerHTML = '<option value="">اختر معلم</option>' + html;
+        }
+
+        async function addTeacherPayment() {
+            const data = {
+                TeacherID: document.getElementById('teacherSelect').value,
+                MonthOfPayment: document.getElementById('monthInput').value,
+                AmountPaid: parseFloat(document.getElementById('amountInput').value),
+                Notes: document.getElementById('notesInput').value
+            };
+
+            if (!data.TeacherID || !data.MonthOfPayment || !data.AmountPaid) {
+                return alert("يرجى ملء جميع الحقول");
+            }
+
+            await fetch('/api/payments/teacher', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            alert("✅ تم تسجيل الدفع بنجاح");
+            loadTeacherPayments();
+        }
+
+        async function loadTeacherPayments() {
+            const res = await fetch('/api/payments/teacher');
+            const payments = await res.json();
+            const tbody = document.querySelector('#paymentsTable tbody');
+            tbody.innerHTML = payments.map(p => `
+                <tr>
+                    <td>${p.PaymentDate ? p.PaymentDate.split('T')[0] : '-'}</td>
+                    <td>${p.FirstName} ${p.LastName}</td>
+                    <td>${p.MonthOfPayment}</td>
+                    <td>${p.AmountPaid} د.ج</td>
+                    <td>${p.Notes || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        window.onload = () => {
+            loadTeachers();
+            loadTeacherPayments();
+        };
+    </script>
+</body>
+</html>

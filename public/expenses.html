@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المصروفات</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        th, td {
+            padding: 14px 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+            width: 20%;
+        }
+        th {
+            background: #2c3e50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>💸 إدارة المصروفات</h1>
+    <a href="index.html">← العودة للرئيسية</a>
+
+    <div style="margin:25px 0; text-align:center;">
+        <input type="text" id="monthInput" value="2026-05" placeholder="YYYY-MM" style="padding:12px; width:180px; text-align:center;">
+        <button onclick="loadExpenses()" class="main-btn">عرض</button>
+        <button onclick="showAddForm()" class="main-btn">+ إضافة مصروف</button>
+        <button onclick="exportExpensesExcel()" class="main-btn" style="background:#27ae60;">📊 تصدير Excel</button>
+    </div>
+
+    <table id="expensesTable" border="1" style="width:100%;">
+        <thead>
+            <tr>
+                <th>التاريخ</th>
+                <th>الفئة</th>
+                <th>الوصف</th>
+                <th>المبلغ</th>
+                <th>إجراء</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Modal -->
+    <div id="addModal" class="modal" style="display:none;">
+        <h3>💸 إضافة مصروف جديد</h3>
+        
+        <input type="date" id="modalDate" style="width:100%; padding:12px; margin:10px 0;">
+        <select id="modalCategory" style="width:100%; padding:12px; margin:10px 0;">
+            <option value="إيجار">إيجار</option>
+            <option value="كهرباء">كهرباء</option>
+            <option value="ماء">ماء</option>
+            <option value="إنترنت">إنترنت</option>
+            <option value="لوازم أخرى">لوازم أخرى</option>
+        </select>
+        <input type="text" id="modalDescription" placeholder="الوصف" style="width:100%; padding:12px; margin:10px 0;">
+        <input type="number" id="modalAmount" placeholder="المبلغ (د.ج)" style="width:100%; padding:12px; margin:10px 0;">
+        
+        <div style="text-align:center; margin-top:25px;">
+            <button onclick="addExpense()" style="background:#27ae60; color:white;">حفظ المصروف</button>
+            <button onclick="hideAddForm()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+       async function loadExpenses() {
+    const month = document.getElementById('monthInput').value.trim();
+    let url = '/api/expenses';
+    if (month) url += `?month=${month}`;
+
+    console.log("Fetching from:", url);
+
+    try {
+        const res = await fetch(url);
+        console.log("Status:", res.status);
+
+        if (!res.ok) {
+            throw new Error("Server error: " + res.status);
+        }
+
+        const expenses = await res.json();
+        console.log("Received expenses:", expenses);
+
+        const tbody = document.querySelector('#expensesTable tbody');
+        tbody.innerHTML = expenses.map(exp => {
+            let cleanDate = '-';
+            if (exp.ExpenseDate) {
+                const datePart = exp.ExpenseDate.split('T')[0];
+                const [year, month, day] = datePart.split('-');
+                cleanDate = `${day}/${month}/${year}`;
+            }
+            return `
+                <tr>
+                    <td>${cleanDate}</td>
+                    <td>${exp.Category}</td>
+                    <td>${exp.Description || '-'}</td>
+                    <td>${exp.Amount} د.ج</td>
+                    <td><button onclick="deleteExpense(${exp.ExpenseID})" style="background:#e74c3c;color:white;">حذف</button></td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Load error:", e);
+        document.querySelector('#expensesTable tbody').innerHTML = `<tr><td colspan="5">خطأ في تحميل المصروفات - تحقق من السيرفر</td></tr>`;
+    }
+}
+        async function addExpense() {
+            const expenseDate = document.getElementById('modalDate').value;
+
+            const data = {
+                MonthOfExpense: expenseDate ? expenseDate.substring(0, 7) : '',
+                Category: document.getElementById('modalCategory').value,
+                Description: document.getElementById('modalDescription').value.trim(),
+                Amount: parseFloat(document.getElementById('modalAmount').value),
+                ExpenseDate: expenseDate
+            };
+
+            if (!expenseDate || !data.Amount) {
+                return alert("يرجى اختيار التاريخ وإدخال المبلغ");
+            }
+
+            try {
+                const res = await fetch('/api/expenses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    hideAddForm();
+                    loadExpenses();
+                    alert("✅ تم حفظ المصروف بنجاح!");
+                }
+            } catch (e) {
+                alert("خطأ في الاتصال");
+            }
+        }
+
+        async function deleteExpense(id) {
+            if (confirm('حذف هذا المصروف؟')) {
+                try {
+                    await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+                    alert("✅ تم الحذف");
+                    loadExpenses();
+                } catch (e) {
+                    alert("❌ خطأ في الحذف");
+                }
+            }
+        }
+
+        function showAddForm() { 
+            document.getElementById('addModal').style.display = 'block'; 
+        }
+
+        function hideAddForm() { 
+            document.getElementById('addModal').style.display = 'none'; 
+        }
+
+        function exportExpensesExcel() {
+            window.location.href = '/api/expenses/export';
+        }
+
+        async function exportExpensesExcel() {
+    try {
+        const res = await fetch('/api/expenses');
+        const expenses = await res.json();
+
+        const BOM = '\uFEFF';
+        const headers = ['التاريخ', 'الفئة', 'المبلغ'];
+
+        const rows = expenses.map(exp => {
+            let cleanDate = '';
+            if (exp.ExpenseDate) {
+                const datePart = exp.ExpenseDate.split('T')[0];
+                const [year, month, day] = datePart.split('-');
+                cleanDate = `${day}/${month}/${year}`;
+            }
+            return [
+                cleanDate,
+                exp.Category || '',
+                exp.Amount || 0
+            ];
+        });
+
+        const csvContent = BOM + [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'قائمة_مصروفات.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        alert("✅ تم التصدير بنجاح!");
+    
+        console.log("✅ Excel exported successfully");
+    } catch (e) {
+        console.error("Export error:", e);
+        alert("خطأ في تصدير Excel");
+    }
+}
+
+        window.onload = loadExpenses;
+    </script>
+</body>
+</html>
