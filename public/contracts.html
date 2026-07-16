@@ -181,7 +181,7 @@
             if (confirm('حذف هذا العقد؟')) {
                 try {
                     await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
-                    alert("✅ تم الحذف");
+                    alert("✅ تم حذف العقد");
                     loadContracts();
                 } catch (e) {
                     alert("❌ خطأ في الحذف");

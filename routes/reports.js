@@ -140,24 +140,81 @@ router.get('/export/financial/:month', (req, res) => {
     });
 });
 
-router.get('/export/financial/yearly/2026', (req, res) => {
+router.get('/export/financial/yearly/2026', async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('تقرير_سنوي_2026');
 
     sheet.columns = [
         { header: 'الشهر', key: 'month', width: 15 },
-        { header: 'الإيرادات', key: 'income', width: 15 },
-        { header: 'رواتب المعلمين', key: 'teacher', width: 15 },
-        { header: 'مصروفات أخرى', key: 'other', width: 15 },
-        { header: 'إجمالي المصروفات', key: 'totalExp', width: 15 },
-        { header: 'الربح', key: 'net', width: 15 }
+        { header: 'الإيرادات', key: 'income', width: 18 },
+        { header: 'رواتب المعلمين', key: 'teacher', width: 18 },
+        { header: 'مصروفات أخرى', key: 'other', width: 18 },
+        { header: 'إجمالي المصروفات', key: 'totalExp', width: 18 },
+        { header: 'الربح', key: 'net', width: 18 }
     ];
 
-    sheet.addRow({ month: '2026-07', income: 0, teacher: 0, other: 0, totalExp: 0, net: 0 });
+    try {
+        const year = '2026';
+        const months = Array.from({ length: 12 }, (_, i) => `${year}-${(i+1).toString().padStart(2, '0')}`);
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=yearly_report_2026.xlsx');
-    workbook.xlsx.write(res).then(() => res.end());
+        const incomeRows = await new Promise((resolve) => {
+            db.all(`SELECT substr(COALESCE(PaymentDate, MonthOfPayment || '-01'), 1, 7) as Month, 
+                           COALESCE(SUM(AmountPaid), 0) as Income 
+                    FROM StudentPayments 
+                    WHERE substr(COALESCE(PaymentDate, MonthOfPayment || '-01'), 1, 4) = ? 
+                    GROUP BY Month`, [year], (err, rows) => resolve(rows || []));
+        });
+
+        const salaryRows = await new Promise((resolve) => {
+            db.all(`SELECT substr(StartDate, 1, 7) as Month, 
+                           COALESCE(SUM(PaymentRate), 0) as TeacherSal 
+                    FROM TeacherContracts 
+                    WHERE IsPaid = 1 AND IsActive = 1 
+                    AND substr(StartDate, 1, 4) = ? 
+                    GROUP BY Month`, [year], (err, rows) => resolve(rows || []));
+        });
+
+        const otherRows = await new Promise((resolve) => {
+            db.all(`SELECT substr(MonthOfExpense, 1, 7) as Month, 
+                           COALESCE(SUM(Amount), 0) as Other 
+                    FROM OtherExpenses 
+                    WHERE substr(MonthOfExpense, 1, 4) = ? 
+                    GROUP BY Month`, [year], (err, rows) => resolve(rows || []));
+        });
+
+        const incMap = {}, salMap = {}, othMap = {};
+        incomeRows.forEach(r => incMap[r.Month] = Number(r.Income));
+        salaryRows.forEach(r => salMap[r.Month] = Number(r.TeacherSal));
+        otherRows.forEach(r => othMap[r.Month] = Number(r.Other));
+
+        let totalIncome = 0, totalTeacher = 0, totalOther = 0;
+
+        const monthlyData = months.map(m => {
+            const inc = incMap[m] || 0;
+            const sal = salMap[m] || 0;
+            const oth = othMap[m] || 0;
+            const net = inc - sal - oth;
+
+            totalIncome += inc;
+            totalTeacher += sal;
+            totalOther += oth;
+
+            return { month: m, income: inc, teacher: sal, other: oth, totalExp: sal + oth, net };
+        });
+
+        sheet.addRows(monthlyData);
+
+        // إضافة الإجماليات في الأسفل
+        sheet.addRow({});
+        sheet.addRow({ month: 'الإجمالي', income: totalIncome, teacher: totalTeacher, other: totalOther, totalExp: totalTeacher + totalOther, net: totalIncome - totalTeacher - totalOther });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=yearly_report_2026.xlsx');
+        workbook.xlsx.write(res).then(() => res.end());
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('خطأ في إنشاء التقرير السنوي');
+    }
 });
 
 module.exports = router;

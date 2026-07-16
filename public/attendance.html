@@ -565,65 +565,109 @@
             }
         }
 
-        // Export functions
-        async function exportStudentsExcel() {
-            try {
-                const res = await fetch('/api/attendance/students-all');
-                const records = await res.json();
+        // تصدير حضور الطلاب مع ترقيم الدورة
+async function exportStudentsExcel() {
+    try {
+        const res = await fetch('/api/attendance/students-all');
+        const records = await res.json();
 
-                const BOM = '\uFEFF';
-                const headers = ['الطالب', 'المادة', 'الدورة', 'التاريخ'];
-                const rows = records.map(r => [
+        const BOM = '\uFEFF';
+        const headers = ['الطالب', 'المادة', 'رقم الحضور في الدورة', 'الدورة', 'التاريخ'];
+        const rows = [];
+
+        // تجميع حسب الطالب + المادة
+        const grouped = {};
+        records.forEach(r => {
+            const key = `${r.StudentID}|${r.Subject}`;
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(r);
+        });
+
+        Object.keys(grouped).sort().forEach(key => {
+            const groupRecords = grouped[key];
+            // ترتيب زمنياً
+            groupRecords.sort((a, b) => a.Date.localeCompare(b.Date));
+
+            groupRecords.forEach((r, index) => {
+                rows.push([
                     `${r.FirstName || ''} ${r.LastName || r.StudentID}`.trim(),
                     r.Subject || '',
-                    r.Cycle || '',
-                    r.Date || ''
+                    index + 1,                    // 1, 2, 3, 4...
+                    `دورة ${r.Cycle}`,
+                    r.Date
                 ]);
+            });
+        });
 
-                const csvContent = BOM + [headers, ...rows]
-                    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-                    .join('\n');
+        const csvContent = BOM + [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
 
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'حضور_الطلاب.csv';
-                link.click();
-                URL.revokeObjectURL(url);
-                alert("✅ تم التصدير بنجاح!");
-            } catch (err) { alert("❌ فشل التصدير"); }
-        }
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'حضور_الطلاب.csv';
+        link.click();
+        URL.revokeObjectURL(url);
 
-        async function exportTeachersExcel() {
-            try {
-                const res = await fetch('/api/attendance/teachers-all');
-                const records = await res.json();
+        alert("✅ تم تصدير حضور الطلاب مع ترقيم الدورة (1,2,3...)!");
+    } catch (err) {
+        console.error(err);
+        alert("❌ فشل التصدير");
+    }
+}
 
-                const BOM = '\uFEFF';
-                const headers = ['المعلم', 'المادة', 'الوحدات', 'التاريخ'];
-                const rows = records.map(r => [
-                    `${r.FirstName} ${r.LastName}`,
+// تصدير حضور المعلمين مع ترقيم متسلسل
+async function exportTeachersExcel() {
+    try {
+        const res = await fetch('/api/attendance/teachers-all');
+        const records = await res.json();
+
+        const BOM = '\uFEFF';
+        const headers = ['المعلم', 'المادة', 'رقم الحضور', 'التاريخ'];
+        const rows = [];
+
+        // تجميع حسب المعلم
+        const grouped = {};
+        records.forEach(r => {
+            const key = `${r.FirstName} ${r.LastName}`;
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(r);
+        });
+
+        Object.keys(grouped).sort((a,b) => a.localeCompare(b, 'ar')).forEach(name => {
+            const groupRecords = grouped[name];
+            groupRecords.sort((a, b) => a.Date.localeCompare(b.Date));
+
+            groupRecords.forEach((r, index) => {
+                rows.push([
+                    name,
                     r.Subject || '',
-                    r.WorkedUnits || '',
-                    r.Date || ''
+                    index + 1,                    // 1, 2, 3...
+                    r.Date
                 ]);
+            });
+        });
 
-                const csvContent = BOM + [headers, ...rows]
-                    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-                    .join('\n');
+        const csvContent = BOM + [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
 
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'حضور_المعلمين.csv';
-                link.click();
-                URL.revokeObjectURL(url);
-                alert("✅ تم التصدير بنجاح!");
-            } catch (err) { alert("❌ فشل التصدير"); }
-        }
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'حضور_المعلمين.csv';
+        link.click();
+        URL.revokeObjectURL(url);
 
+        alert("✅ تم تصدير حضور المعلمين مع ترقيم متسلسل!");
+    } catch (err) {
+        console.error(err);
+        alert("❌ فشل التصدير");
+    }
+}
         window.onload = async () => {
             await loadTeachers();
             await loadSubjectSettings();

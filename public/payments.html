@@ -144,7 +144,7 @@
         if (confirm('حذف هذه الدفعة؟')) {
             try {
                 await fetch(`/api/payments/${id}`, { method: 'DELETE' });
-                alert("✅ تم تأكيد الدفع");
+                alert("✅ تم حذف الدفعة");
                 loadPayments();
          } catch (e) {
                     alert("❌ خطأ في الحذف");
