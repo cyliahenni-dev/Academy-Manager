@@ -8,6 +8,139 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
 <body>
+    <!-- ====================== حماية الصفحة برمز PIN ====================== -->
+<div id="pinLock" style="position:fixed; inset:0; background:#f0f2f5; z-index:9999; display:flex; align-items:center; justify-content:center;">
+    
+    <div style="background:white; padding:35px 40px; border-radius:18px; box-shadow:0 12px 35px rgba(0,0,0,0.12); text-align:center; width:380px; position:relative;">
+        
+        <!-- زر X داخل اللوحة -->
+        <button onclick="closePinLock()" 
+                style="position:absolute; top:14px; left:14px; background:#e74c3c; color:white; border:none; width:34px; height:34px; border-radius:50%; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;">
+            ✕
+        </button>
+
+        <div style="margin-top:10px; margin-bottom:8px; font-size:28px;">🔒</div>
+        <h2 style="margin:0 0 6px 0; color:#2c3e50; font-size:22px;">محمية</h2>
+        <p style="color:#777; margin:0 0 25px 0; font-size:15px;">أدخل الرمز للدخول</p>
+        
+        <input type="password" id="pinInput" maxlength="10" placeholder="أدخل الرمز"
+               style="padding:13px 15px; width:100%; font-size:18px; text-align:center; border:2px solid #e0e0e0; border-radius:10px; margin-bottom:14px; letter-spacing:3px; box-sizing:border-box; outline:none;">
+        
+        <button onclick="checkPin()" 
+                style="background:#27ae60; color:white; border:none; padding:13px; border-radius:10px; font-size:16px; cursor:pointer; width:100%; margin-bottom:10px; font-weight:600;">
+            دخول
+        </button>
+
+        <button onclick="showChangePin()" 
+                style="background:#3498db; color:white; border:none; padding:11px; border-radius:10px; font-size:14px; cursor:pointer; width:100%;">
+            تغيير الرمز
+        </button>
+
+        <p id="pinError" style="color:#e74c3c; margin:12px 0 0 0; display:none; font-size:14px;"></p>
+    </div>
+</div>
+
+<!-- نافذة تغيير الرمز -->
+<div id="changePinBox" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:10000; align-items:center; justify-content:center;">
+    <div style="background:white; padding:30px; border-radius:16px; width:340px; text-align:center; position:relative;">
+        
+        <button onclick="closeChangePin()" 
+                style="position:absolute; top:12px; left:12px; background:#e74c3c; color:white; border:none; width:30px; height:30px; border-radius:50%; font-size:14px; cursor:pointer;">
+            ✕
+        </button>
+
+        <h3 style="margin:10px 0 18px 0; color:#2c3e50;">تغيير الرمز</h3>
+        
+        <input type="password" id="oldPin" placeholder="الرمز الحالي" 
+               style="padding:12px; width:100%; margin-bottom:10px; border:1.5px solid #ddd; border-radius:9px; text-align:center; box-sizing:border-box;">
+        <input type="password" id="newPin" placeholder="الرمز الجديد" 
+               style="padding:12px; width:100%; margin-bottom:10px; border:1.5px solid #ddd; border-radius:9px; text-align:center; box-sizing:border-box;">
+        <input type="password" id="confirmPin" placeholder="تأكيد الرمز الجديد" 
+               style="padding:12px; width:100%; margin-bottom:18px; border:1.5px solid #ddd; border-radius:9px; text-align:center; box-sizing:border-box;">
+        
+        <div style="display:flex; gap:10px;">
+            <button onclick="changePin()" style="flex:1; background:#27ae60; color:white; border:none; padding:12px; border-radius:9px; cursor:pointer; font-size:15px;">حفظ</button>
+            <button onclick="closeChangePin()" style="flex:1; background:#95a5a6; color:white; border:none; padding:12px; border-radius:9px; cursor:pointer; font-size:15px;">إلغاء</button>
+        </div>
+        
+        <p id="changeError" style="color:#e74c3c; margin-top:12px; display:none; font-size:13px;"></p>
+    </div>
+</div>
+
+<script>
+    const DEFAULT_PIN = "1234";
+
+    function getCurrentPin() {
+        return localStorage.getItem("adminPIN") || DEFAULT_PIN;
+    }
+
+    function checkPin() {
+        const input = document.getElementById("pinInput").value.trim();
+        const correctPin = getCurrentPin();
+
+        if (input === correctPin) {
+            document.getElementById("pinLock").style.display = "none";
+            document.getElementById("pinError").style.display = "none";
+        } else {
+            document.getElementById("pinError").textContent = "رمز خاطئ";
+            document.getElementById("pinError").style.display = "block";
+            document.getElementById("pinInput").value = "";
+            document.getElementById("pinInput").focus();
+        }
+    }
+
+    function closePinLock() {
+        window.location.href = "index.html";
+    }
+
+    function showChangePin() {
+        document.getElementById("changePinBox").style.display = "flex";
+        document.getElementById("oldPin").value = "";
+        document.getElementById("newPin").value = "";
+        document.getElementById("confirmPin").value = "";
+        document.getElementById("changeError").style.display = "none";
+    }
+
+    function closeChangePin() {
+        document.getElementById("changePinBox").style.display = "none";
+    }
+
+    function changePin() {
+        const oldPin = document.getElementById("oldPin").value.trim();
+        const newPin = document.getElementById("newPin").value.trim();
+        const confirmPin = document.getElementById("confirmPin").value.trim();
+        const currentPin = getCurrentPin();
+
+        if (oldPin !== currentPin) {
+            document.getElementById("changeError").textContent = "الرمز الحالي غير صحيح";
+            document.getElementById("changeError").style.display = "block";
+            return;
+        }
+        if (newPin.length < 4) {
+            document.getElementById("changeError").textContent = "الرمز يجب أن يكون 4 أرقام على الأقل";
+            document.getElementById("changeError").style.display = "block";
+            return;
+        }
+        if (newPin !== confirmPin) {
+            document.getElementById("changeError").textContent = "الرمز الجديد غير متطابق";
+            document.getElementById("changeError").style.display = "block";
+            return;
+        }
+
+        localStorage.setItem("adminPIN", newPin);
+        alert("✅ تم تغيير الرمز بنجاح");
+        closeChangePin();
+    }
+
+    document.getElementById("pinInput").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") checkPin();
+    });
+
+    window.addEventListener("load", () => {
+        document.getElementById("pinInput").focus();
+    });
+</script>
+<!-- ====================== نهاية الحماية ====================== -->
     <h1>📋 عقود ورواتب المعلمين</h1>
     <a href="index.html">← العودة للرئيسية</a>
 
